@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Combustibles Lima - Datos Reales Osinergmin</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --primary: #0056b3; --bg: #f4f7f6; --card-bg: #ffffff; --text: #333333; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); padding-bottom: 40px; }
+        .sectors-scroll-container { background: var(--primary); padding: 15px 0; position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .sectors-scroll { display: flex; gap: 15px; overflow-x: auto; padding: 0 20px; }
+        .sectors-scroll::-webkit-scrollbar { height: 6px; }
+        .sectors-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 3px; }
+        .sector-btn { background: rgba(255,255,255,0.1); color: white; border: 2px solid transparent; padding: 10px 24px; border-radius: 25px; cursor: pointer; white-space: nowrap; font-weight: bold; transition: all 0.3s ease; }
+        .sector-btn:hover { background: rgba(255,255,255,0.2); }
+        .sector-btn.active { background: white; color: var(--primary); border-color: var(--primary); }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header-info { text-align: center; margin: 30px 0; }
+        .header-info h1 { font-size: 2.5rem; color: var(--primary); }
+        .header-info p { color: #666; margin-top: 10px; font-size: 1.1rem; }
+        .current-prices { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 40px; }
+        .price-card { background: var(--card-bg); padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); text-align: center; border-top: 5px solid var(--primary); transition: transform 0.3s; }
+        .price-card:hover { transform: translateY(-5px); }
+        .price-card h3 { font-size: 1.1rem; color: #666; margin-bottom: 10px; }
+        .price-card .price { font-size: 2.2rem; font-weight: bold; color: var(--text); }
+        .price-card .trend { margin-top: 10px; font-size: 0.9rem; font-weight: bold; }
+        .up { color: #d9534f; } .down { color: #5cb85c; }
+        .chart-container { background: var(--card-bg); padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+        .chart-header h2 { font-size: 1.5rem; }
+        .fuel-selector { display: flex; gap: 10px; }
+        .fuel-btn { padding: 8px 16px; border: 1px solid #ccc; background: white; border-radius: 6px; cursor: pointer; transition: 0.2s; }
+        .fuel-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+        .loading { text-align: center; font-size: 1.2rem; padding: 50px; color: #666; }
+    </style>
+</head>
+<body>
+
+    <div class="sectors-scroll-container">
+        <div class="sectors-scroll" id="sectorScroll"></div>
+    </div>
+
+    <div class="container">
+        <div class="header-info">
+            <h1>Combustibles en Lima (Osinergmin)</h1>
+            <p id="dateRange">Cargando datos reales...</p>
+        </div>
+        <div id="loadingMsg" class="loading">Obteniendo precios de Osinergmin, esto puede tomar unos segundos la primera vez...</div>
+        <div class="current-prices" id="currentPricesGrid" style="display:none;"></div>
+        <div class="chart-container" id="chartContainer" style="display:none;">
+            <div class="chart-header">
+                <h2>Comportamiento Histórico Real (S/ por Galón)</h2>
+                <div class="fuel-selector" id="fuelSelector"></div>
+            </div>
+            <canvas id="historyChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const SECTORES = ['Lima Centro', 'Cono Norte', 'Cono Sur', 'Cono Este'];
+        const COMBUSTIBLES = [
+            { id: 'g90', nombre: 'Gasohol 90', color: '#f39c12' },
+            { id: 'g95', nombre: 'Gasohol 95', color: '#e74c3c' },
+            { id: 'g97', nombre: 'Gasohol 97', color: '#9b59b6' },
+            { id: 'db5', nombre: 'DB5', color: '#2980b9' }
+        ];
+
+        let sectorActual = 'Lima Centro';
+        let combustibleGraficoActual = 'g95';
+        let miGrafico = null;
+        let historialDatos = {}; // Objeto grande que vendrá de Python
+
+        // NUEVA FUNCIÓN: Pedir datos a nuestro backend Python
+        async function cargarDatosReales() {
+            try {
+                const response = await fetch('/api/datos');
+                const dataJson = await response.json();
+                
+                // Agrupar los datos que vienen de la BD por sector
+                historialDatos = {};
+                dataJson.forEach(dia => {
+                    if (!historialDatos[dia.sector]) historialDatos[dia.sector] = [];
+                    historialDatos[dia.sector].push({ fecha: dia.fecha, precios: dia.precios });
+                });
+
+                // Ocultar loading, mostrar contenido
+                document.getElementById('loadingMsg').style.display = 'none';
+                document.getElementById('currentPricesGrid').style.display = 'grid';
+                document.getElementById('chartContainer').style.display = 'block';
+
+                iniciarInterfaz();
+            } catch (error) {
+                document.getElementById('loadingMsg').innerText = "Error al conectar con el servidor. Intenta recargar.";
+            }
+        }
+
+        function iniciarInterfaz() {
+            actualizarRangoFechas();
+            renderizarSectores();
+            renderizarTarjetas();
+            renderizarSelectorCombustible();
+            actualizarGrafico();
+        }
+
+        function actualizarRangoFechas() {
+            const datosSector = historialDatos[sectorActual];
+            if(!datosSector || datosSector.length === 0) return;
+            const primeraFecha = datosSector[0].fecha;
+            const ultimaFecha = datosSector[datosSector.length - 1].fecha;
+            document.getElementById('dateRange').innerText = `Rango de análisis: ${formatearFecha(primeraFecha)} al ${formatearFecha(ultimaFecha)} (Datos oficiales)`;
+        }
+
+        function formatearFecha(fechaStr) {
+            const [y, m, d] = fechaStr.split('-');
+            return `${d}/${m}/${y}`;
+        }
+
+        function renderizarSectores() {
+            const container = document.getElementById('sectorScroll');
+            container.innerHTML = '';
+            SECTORES.forEach(sector => {
+                const btn = document.createElement('button');
+                btn.className = `sector-btn ${sector === sectorActual ? 'active' : ''}`;
+                btn.innerText = sector;
+                btn.onclick = () => { sectorActual = sector; iniciarInterfaz(); };
+                container.appendChild(btn);
+            });
+        }
+
+        function renderizarTarjetas() {
+            const container = document.getElementById('currentPricesGrid');
+            container.innerHTML = '';
+            const datosSector = historialDatos[sectorActual];
+            if(!datosSector || datosSector.length < 2) return;
+            
+            const datosHoy = datosSector[datosSector.length - 1];
+            const datosAyer = datosSector[datosSector.length - 2];
+
+            COMBUSTIBLES.forEach(comb => {
+                const precioHoy = datosHoy.precios[comb.id];
+                const precioAyer = datosAyer.precios[comb.id];
+                if(precioHoy === 0 || precioAyer === 0) return; // Si no hay dato, no muestra tarjeta
+
+                const diferencia = precioHoy - precioAyer;
+                const esSubida = diferencia > 0;
+                const card = document.createElement('div');
+                card.className = 'price-card';
+                card.style.borderTopColor = comb.color;
+                card.innerHTML = `
+                    <h3>${comb.nombre}</h3>
+                    <div class="price">S/ ${precioHoy.toFixed(2)}</div>
+                    <div class="trend ${esSubida ? 'up' : 'down'}">
+                        ${esSubida ? '▲' : '▼'} S/ ${Math.abs(diferencia).toFixed(2)} vs ayer
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function renderizarSelectorCombustible() {
+            const container = document.getElementById('fuelSelector');
+            container.innerHTML = '';
+            COMBUSTIBLES.forEach(comb => {
+                const btn = document.createElement('button');
+                btn.className = `fuel-btn ${comb.id === combustibleGraficoActual ? 'active' : ''}`;
+                btn.innerText = comb.nombre;
+                btn.onclick = () => { combustibleGraficoActual = comb.id; renderizarSelectorCombustible(); actualizarGrafico(); };
+                container.appendChild(btn);
+            });
+        }
+
+        function actualizarGrafico() {
+            const datosSector = historialDatos[sectorActual];
+            if(!datosSector) return;
+            const combInfo = COMBUSTIBLES.find(c => c.id === combustibleGraficoActual);
+            
+            const labels = datosSector.map(d => formatearFecha(d.fecha));
+            const dataPoints = datosSector.map(d => d.precios[combustibleGraficoActual]);
+
+            if (miGrafico) miGrafico.destroy();
+            miGrafico = new Chart(document.getElementById('historyChart'), {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{ label: combInfo.nombre, data: dataPoints, borderColor: combInfo.color, backgroundColor: combInfo.color + '20', borderWidth: 2, pointRadius: 1, fill: true, tension: 0.1 }]
+                },
+                options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: false, ticks: { callback: value => 'S/ ' + value } } } }
+            });
+        }
+
+        // Iniciar la app pidiendo datos a Python
+        window.onload = cargarDatosReales;
+    </script>
+</body>
+</html>
