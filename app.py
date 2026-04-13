@@ -33,45 +33,57 @@ SECTORES_MAP = {
 PRODUCTOS_OBJETIVO = ['GASOHOL 90', 'GASOHOL 95', 'GASOHOL 97', 'DB5 S-50']
 
 def obtener_datos_osinergmin():
-    """Se conecta a la API interna de Osinergmin y extrae los datos"""
-    url = "https://appserver.osinergmin.gob.pe/preciosinferior/api/PrecioInferior/ObtenerPrecioInferior"
-    payload = {
-        "idDistrito": 0, "idProducto": 0, "idProvincia": 0, "idDepartamento": 15,
-        "codSector": 0, "codVia": 0, "nomDistrito": "", "nomProducto": "",
-        "nomProvincia": "", "nomDepartamento": "LIMA"
-    }
+    """Lee la tabla de precios desde preciocombustible.com"""
+    
+    url = "https://www.preciocombustible.com/lima/"
+    
+    # --- BLOQUE 1: Cabeceras ---
+    # Le decimos al sitio que somos un navegador normal,
+    # así evitamos que nos bloquee por ser un "robot"
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        'Content-Type': 'application/json'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'es-PE,es;q=0.9',
     }
     
     try:
-        response = requests.post(url, json=payload, headers=headers, timeout=15)
-        data = response.json()
-        df = pd.DataFrame(data)
+        # --- BLOQUE 2: Descargar el HTML ---
+        # requests.get descarga el contenido de la página,
+        # como si tu navegador la abriera pero sin mostrarla
+        print(">>> Conectando a preciocombustible.com...")
+        response = requests.get(url, headers=headers, timeout=15)
+        print(f">>> Status: {response.status_code}")
         
-        # Filtrar solo los productos que nos interesan y quitar outliers (precios basura)
-        df = df[df['nomProducto'].isin(PRODUCTOS_OBJETIVO)]
-        df = df[pd.to_numeric(df['precio'], errors='coerce') > 10]  # Ignorar precios menores a 10 soles        
-        # Asignar Sector basado en el distrito
-        def asignar_sector(distrito):
-            distrito_upper = distrito.upper()
-            for sector, distritos in SECTORES_MAP.items():
-                if distrito_upper in distritos:
-                    return sector
+        # Si el status no es 200 (OK), lanzamos un error
+        response.raise_for_status()
+        
+        # --- BLOQUE 3: Parsear el HTML ---
+        # BeautifulSoup convierte el HTML crudo en algo
+        # que podemos buscar fácilmente, como un buscador interno
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # --- BLOQUE 4: Encontrar la tabla ---
+        # Buscamos todas las tablas en la página
+        # pandas puede leer tablas HTML directamente con read_html()
+        tablas = pd.read_html(response.text)
+        print(f">>> Tablas encontradas: {len(tablas)}")
+        
+        if not tablas:
+            print(">>> No se encontraron tablas")
             return None
-            
-        df['sector'] = df['nomDistrito'].apply(asignar_sector)
-        df = df.dropna(subset=['sector']) # Eliminar distritos que no mapeamos
         
-        # Agrupar por Sector y Producto, calculando el promedio real
-        resultado = df.groupby(['sector', 'nomProducto'])['precio'].mean().unstack(fill_value=0)
+        # La primera tabla suele ser la principal
+        # Si no funciona, prueba con tablas[1], tablas[2], etc.
+        df = tablas[0]
+        print(f">>> Columnas: {df.columns.tolist()}")
+        print(f">>> Primeras filas:\n{df.head()}")
         
-        return resultado
+        return df  # Por ahora retornamos el df crudo para ver su estructura
+        
     except Exception as e:
-        print(f"Error en scraping: {e}")
+        print(f">>> Error en scraping: {e}")
         return None
-
+    
 def actualizar_base_datos():
     """Verifica si hay datos de hoy, si no, hace scraping y guarda"""
     hoy = datetime.now().date()
