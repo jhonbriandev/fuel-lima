@@ -3,195 +3,592 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Combustibles Lima - Datos Reales Osinergmin</title>
+    <title>Fuel Lima — Precios de Combustible</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --primary: #0056b3; --bg: #f4f7f6; --card-bg: #ffffff; --text: #333333; }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-        body { background-color: var(--bg); color: var(--text); padding-bottom: 40px; }
-        .sectors-scroll-container { background: var(--primary); padding: 15px 0; position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .sectors-scroll { display: flex; gap: 15px; overflow-x: auto; padding: 0 20px; }
-        .sectors-scroll::-webkit-scrollbar { height: 6px; }
-        .sectors-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 3px; }
-        .sector-btn { background: rgba(255,255,255,0.1); color: white; border: 2px solid transparent; padding: 10px 24px; border-radius: 25px; cursor: pointer; white-space: nowrap; font-weight: bold; transition: all 0.3s ease; }
-        .sector-btn:hover { background: rgba(255,255,255,0.2); }
-        .sector-btn.active { background: white; color: var(--primary); border-color: var(--primary); }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-        .header-info { text-align: center; margin: 30px 0; }
-        .header-info h1 { font-size: 2.5rem; color: var(--primary); }
-        .header-info p { color: #666; margin-top: 10px; font-size: 1.1rem; }
-        .current-prices { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 40px; }
-        .price-card { background: var(--card-bg); padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); text-align: center; border-top: 5px solid var(--primary); transition: transform 0.3s; }
-        .price-card:hover { transform: translateY(-5px); }
-        .price-card h3 { font-size: 1.1rem; color: #666; margin-bottom: 10px; }
-        .price-card .price { font-size: 2.2rem; font-weight: bold; color: var(--text); }
-        .price-card .trend { margin-top: 10px; font-size: 0.9rem; font-weight: bold; }
-        .up { color: #d9534f; } .down { color: #5cb85c; }
-        .chart-container { background: var(--card-bg); padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
-        .chart-header h2 { font-size: 1.5rem; }
-        .fuel-selector { display: flex; gap: 10px; }
-        .fuel-btn { padding: 8px 16px; border: 1px solid #ccc; background: white; border-radius: 6px; cursor: pointer; transition: 0.2s; }
-        .fuel-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
-        .loading { text-align: center; font-size: 1.2rem; padding: 50px; color: #666; }
+        :root {
+            --primary: #185FA5;
+            --primary-light: #E6F1FB;
+            --primary-dark: #0C447C;
+            --bg: #f5f6f8;
+            --card: #ffffff;
+            --text: #2C2C2A;
+            --text-muted: #5F5E5A;
+            --border: rgba(0,0,0,0.08);
+            --up: #A32D2D;
+            --down: #3B6D11;
+            --amber: #BA7517;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+        body { background: var(--bg); color: var(--text); }
+
+        /* ── NAVBAR ── */
+        .navbar {
+            background: var(--primary-dark);
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 56px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .navbar-brand {
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+        }
+        .navbar-brand span { color: #85B7EB; }
+        .sector-tabs {
+            display: flex;
+            gap: 4px;
+        }
+        .sector-tab {
+            color: rgba(255,255,255,0.65);
+            background: transparent;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .sector-tab:hover { background: rgba(255,255,255,0.1); color: white; }
+        .sector-tab.active { background: rgba(255,255,255,0.15); color: white; }
+
+        /* ── LAYOUT ── */
+        .main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 60px; }
+
+        /* ── HEADER ── */
+        .page-header { margin-bottom: 28px; }
+        .page-header h1 { font-size: 22px; font-weight: 600; color: var(--text); }
+        .page-header p { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
+
+        /* ── ALERTA DATOS INSUFICIENTES ── */
+        .alert {
+            background: #FAEEDA;
+            border: 0.5px solid #EF9F27;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 14px;
+            color: #633806;
+            margin-bottom: 24px;
+            display: none;
+        }
+        .alert.visible { display: block; }
+
+        /* ── TARJETAS DE PRECIO ── */
+        .prices-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+        .price-card {
+            background: var(--card);
+            border: 0.5px solid var(--border);
+            border-radius: 12px;
+            padding: 18px 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        .price-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--accent-color, var(--primary));
+        }
+        .price-card .fuel-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        .price-card .price-value {
+            font-size: 28px;
+            font-weight: 600;
+            color: var(--text);
+            line-height: 1;
+            margin-bottom: 8px;
+        }
+        .price-card .price-unit {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+        .price-card .trend {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 4px;
+            margin-top: 6px;
+        }
+        .trend.up { background: #FCEBEB; color: var(--up); }
+        .trend.down { background: #EAF3DE; color: var(--down); }
+        .trend.flat { background: #F1EFE8; color: var(--text-muted); }
+        .no-data-badge {
+            display: inline-block;
+            font-size: 12px;
+            color: var(--text-muted);
+            background: var(--bg);
+            padding: 3px 8px;
+            border-radius: 4px;
+            margin-top: 6px;
+        }
+
+        /* ── GRÁFICO ── */
+        .chart-card {
+            background: var(--card);
+            border: 0.5px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+        }
+        .chart-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .chart-top h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text);
+        }
+        .chart-top p {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+        .fuel-selector {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .fuel-btn {
+            padding: 6px 14px;
+            border: 0.5px solid var(--border);
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-muted);
+            transition: all 0.15s;
+        }
+        .fuel-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .fuel-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        .chart-wrapper { position: relative; height: 280px; }
+
+        /* ── ESTADO SIN DATOS ── */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+        .empty-state .icon { font-size: 32px; margin-bottom: 12px; }
+        .empty-state p { font-size: 14px; }
+
+        /* ── LOADING ── */
+        .loading-overlay {
+            text-align: center;
+            padding: 80px 20px;
+        }
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid var(--primary-light);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-overlay p { font-size: 14px; color: var(--text-muted); }
+
+        /* ── FOOTER INFO ── */
+        .data-info {
+            margin-top: 16px;
+            font-size: 12px;
+            color: var(--text-muted);
+            text-align: right;
+        }
+
+        @media (max-width: 640px) {
+            .sector-tabs { display: none; }
+            .sector-tabs-mobile {
+                display: flex;
+                gap: 8px;
+                overflow-x: auto;
+                padding: 12px 20px;
+                background: var(--primary-dark);
+            }
+            .sector-tab-m {
+                color: rgba(255,255,255,0.7);
+                background: rgba(255,255,255,0.1);
+                border: none;
+                padding: 6px 14px;
+                border-radius: 20px;
+                cursor: pointer;
+                font-size: 13px;
+                white-space: nowrap;
+            }
+            .sector-tab-m.active { background: white; color: var(--primary); }
+        }
+        @media (min-width: 641px) {
+            .sector-tabs-mobile { display: none; }
+        }
     </style>
 </head>
 <body>
 
-    <div class="sectors-scroll-container">
-        <div class="sectors-scroll" id="sectorScroll"></div>
+<nav class="navbar">
+    <div class="navbar-brand">Fuel<span>Lima</span></div>
+    <div class="sector-tabs" id="sectorTabsDesktop"></div>
+</nav>
+
+<div class="sector-tabs-mobile" id="sectorTabsMobile"></div>
+
+<main class="main">
+
+    <div class="page-header">
+        <h1 id="pageTitle">Precios de combustible — Lima Centro</h1>
+        <p id="pageSubtitle">Cargando datos...</p>
     </div>
 
-    <div class="container">
-        <div class="header-info">
-            <h1>Combustibles en Lima (Osinergmin)</h1>
-            <p id="dateRange">Cargando datos reales...</p>
-        </div>
-        <div id="loadingMsg" class="loading">Obteniendo precios de Osinergmin, esto puede tomar unos segundos la primera vez...</div>
-        <div class="current-prices" id="currentPricesGrid" style="display:none;"></div>
-        <div class="chart-container" id="chartContainer" style="display:none;">
-            <div class="chart-header">
-                <h2>Comportamiento Histórico Real (S/ por Galón)</h2>
+    <div class="alert" id="alertBox"></div>
+
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <p>Obteniendo precios actualizados, esto puede tomar unos segundos la primera vez...</p>
+    </div>
+
+    <div id="appContent" style="display:none;">
+        <div class="prices-grid" id="pricesGrid"></div>
+
+        <div class="chart-card">
+            <div class="chart-top">
+                <div>
+                    <h2>Histórico de precios (S/ por galón)</h2>
+                    <p id="chartSubtitle">Todos los sectores — últimos 6 meses</p>
+                </div>
                 <div class="fuel-selector" id="fuelSelector"></div>
             </div>
-            <canvas id="historyChart"></canvas>
+            <div class="chart-wrapper">
+                <canvas id="historyChart"></canvas>
+            </div>
         </div>
+
+        <div class="data-info" id="dataInfo"></div>
     </div>
 
-    <script>
-        const SECTORES = ['Lima Centro', 'Cono Norte', 'Cono Sur', 'Cono Este'];
-        const COMBUSTIBLES = [
-            { id: 'g90', nombre: 'Gasohol 90', color: '#f39c12' },
-            { id: 'g95', nombre: 'Gasohol 95', color: '#e74c3c' },
-            { id: 'g97', nombre: 'Gasohol 97', color: '#9b59b6' },
-            { id: 'db5', nombre: 'DB5', color: '#2980b9' }
-        ];
+</main>
 
-        let sectorActual = 'Lima Centro';
-        let combustibleGraficoActual = 'g95';
-        let miGrafico = null;
-        let historialDatos = {}; // Objeto grande que vendrá de Python
+<script>
+const SECTORES = ['Lima Centro', 'Cono Norte', 'Cono Sur', 'Cono Este'];
 
-        // NUEVA FUNCIÓN: Pedir datos a nuestro backend Python
-        async function cargarDatosReales() {
-            try {
-                const response = await fetch('/api/datos');
-                const dataJson = await response.json();
-                
-                // Agrupar los datos que vienen de la BD por sector
-                historialDatos = {};
-                dataJson.forEach(dia => {
-                    if (!historialDatos[dia.sector]) historialDatos[dia.sector] = [];
-                    historialDatos[dia.sector].push({ fecha: dia.fecha, precios: dia.precios });
+const COMBUSTIBLES = [
+    { id: 'g90', nombre: 'Gasohol 90', color: '#EF9F27' },
+    { id: 'g95', nombre: 'Gasohol 95', color: '#E24B4A' },
+    { id: 'g97', nombre: 'Gasohol 97', color: '#7F77DD' },
+    { id: 'db5', nombre: 'DB5 S-50',  color: '#378ADD' }
+];
+
+let sectorActual = 'Lima Centro';
+let combustibleActual = 'g95';
+let miGrafico = null;
+let historial = {};  // { 'Lima Centro': [{fecha, precios}, ...], ... }
+
+/* ─────────────────────────────────────────
+   BLOQUE 1: Cargar datos desde el backend
+   Fetch es como hacerle una pregunta a Python
+   y esperar la respuesta antes de seguir.
+───────────────────────────────────────── */
+async function cargarDatos() {
+    try {
+        const res = await fetch('/api/datos');
+        const json = await res.json();
+
+        // Agrupar los registros planos por sector
+        // Es como ordenar cartas en sobres etiquetados
+        historial = {};
+        SECTORES.forEach(s => historial[s] = []);
+
+        json.forEach(dia => {
+            if (historial[dia.sector] !== undefined) {
+                historial[dia.sector].push({
+                    fecha: dia.fecha,
+                    precios: dia.precios
                 });
+            }
+        });
 
-                // Ocultar loading, mostrar contenido
-                document.getElementById('loadingMsg').style.display = 'none';
-                document.getElementById('currentPricesGrid').style.display = 'grid';
-                document.getElementById('chartContainer').style.display = 'block';
+        document.getElementById('loadingOverlay').style.display = 'none';
+        document.getElementById('appContent').style.display = 'block';
 
-                iniciarInterfaz();
-            } catch (error) {
-                document.getElementById('loadingMsg').innerText = "Error al conectar con el servidor. Intenta recargar.";
+        renderTodo();
+
+    } catch (err) {
+        document.getElementById('loadingOverlay').innerHTML =
+            '<p style="color:#A32D2D;">Error al conectar. Recarga la página.</p>';
+    }
+}
+
+/* ─────────────────────────────────────────
+   BLOQUE 2: Renderizar todo el contenido
+   Llama a cada función por separado para
+   mantener el código ordenado y legible.
+───────────────────────────────────────── */
+function renderTodo() {
+    renderNavTabs();
+    renderHeader();
+    renderAlerta();
+    renderTarjetas();
+    renderSelectorCombustible();
+    renderGrafico();
+    renderFooter();
+}
+
+/* ─── Tabs de sectores (escritorio y móvil) ─── */
+function renderNavTabs() {
+    ['sectorTabsDesktop', 'sectorTabsMobile'].forEach(id => {
+        const cont = document.getElementById(id);
+        cont.innerHTML = '';
+        SECTORES.forEach(s => {
+            const btn = document.createElement('button');
+            btn.className = (id === 'sectorTabsDesktop' ? 'sector-tab' : 'sector-tab-m')
+                          + (s === sectorActual ? ' active' : '');
+            btn.textContent = s;
+            btn.onclick = () => { sectorActual = s; renderTodo(); };
+            cont.appendChild(btn);
+        });
+    });
+}
+
+/* ─── Título y subtítulo de la página ─── */
+function renderHeader() {
+    const datos = historial[sectorActual] || [];
+    document.getElementById('pageTitle').textContent =
+        `Precios de combustible — ${sectorActual}`;
+
+    if (datos.length === 0) {
+        document.getElementById('pageSubtitle').textContent = 'Sin datos disponibles aún.';
+        return;
+    }
+    const primera = formatFecha(datos[0].fecha);
+    const ultima  = formatFecha(datos[datos.length - 1].fecha);
+    document.getElementById('pageSubtitle').textContent =
+        datos.length === 1
+            ? `Datos del ${ultima} · Acumulando historial diariamente`
+            : `Historial del ${primera} al ${ultima} · ${datos.length} días registrados`;
+}
+
+/* ─── Alerta cuando hay pocos datos ─── */
+function renderAlerta() {
+    const datos = historial[sectorActual] || [];
+    const alerta = document.getElementById('alertBox');
+
+    // Con solo 1 día no podemos mostrar comparativa de "ayer"
+    if (datos.length < 2) {
+        alerta.textContent = datos.length === 0
+            ? 'Aún no hay datos para este sector. Vuelve mañana.'
+            : 'Solo hay datos de hoy. El historial se acumula cada día que se registran precios nuevos.';
+        alerta.classList.add('visible');
+    } else {
+        alerta.classList.remove('visible');
+    }
+}
+
+/* ─── Tarjetas de precio actual ─── */
+function renderTarjetas() {
+    const cont = document.getElementById('pricesGrid');
+    cont.innerHTML = '';
+    const datos = historial[sectorActual] || [];
+
+    if (datos.length === 0) {
+        cont.innerHTML = '<div class="empty-state"><p>Sin datos para este sector.</p></div>';
+        return;
+    }
+
+    const hoy  = datos[datos.length - 1];
+    const ayer = datos.length >= 2 ? datos[datos.length - 2] : null;
+
+    COMBUSTIBLES.forEach(comb => {
+        const precioHoy = hoy.precios[comb.id];
+
+        // Si el precio es 0, no mostramos la tarjeta (no hay dato)
+        if (!precioHoy || precioHoy === 0) return;
+
+        const card = document.createElement('div');
+        card.className = 'price-card';
+        card.style.setProperty('--accent-color', comb.color);
+
+        // ── Calcular tendencia vs ayer ──
+        let trendHTML = '';
+        if (ayer) {
+            const precioAyer = ayer.precios[comb.id];
+            if (precioAyer && precioAyer !== 0) {
+                const diff = precioHoy - precioAyer;
+                if (Math.abs(diff) < 0.001) {
+                    trendHTML = '<span class="trend flat">Sin cambio</span>';
+                } else {
+                    const cls = diff > 0 ? 'up' : 'down';
+                    const sym = diff > 0 ? '↑' : '↓';
+                    trendHTML = `<span class="trend ${cls}">${sym} S/ ${Math.abs(diff).toFixed(2)} vs ayer</span>`;
+                }
+            }
+        } else {
+            trendHTML = '<span class="no-data-badge">Primer registro</span>';
+        }
+
+        card.innerHTML = `
+            <div class="fuel-label">${comb.nombre}</div>
+            <div class="price-value">S/ ${precioHoy.toFixed(2)}<span class="price-unit"> /gal</span></div>
+            ${trendHTML}
+        `;
+        cont.appendChild(card);
+    });
+
+    // Si no se agregó ninguna tarjeta (todos en 0)
+    if (cont.children.length === 0) {
+        cont.innerHTML = '<div style="color:var(--text-muted);font-size:14px;padding:12px 0;">No hay precios disponibles para este sector hoy.</div>';
+    }
+}
+
+/* ─── Botones de selección de combustible ─── */
+function renderSelectorCombustible() {
+    const cont = document.getElementById('fuelSelector');
+    cont.innerHTML = '';
+    COMBUSTIBLES.forEach(comb => {
+        const btn = document.createElement('button');
+        btn.className = 'fuel-btn' + (comb.id === combustibleActual ? ' active' : '');
+        btn.textContent = comb.nombre;
+        btn.onclick = () => { combustibleActual = comb.id; renderSelectorCombustible(); renderGrafico(); };
+        cont.appendChild(btn);
+    });
+}
+
+/* ─────────────────────────────────────────
+   BLOQUE 3: Gráfico histórico
+   Chart.js dibuja la línea de precios.
+   Si solo hay 1 día, muestra un punto.
+   Si hay varios, muestra la línea completa.
+───────────────────────────────────────── */
+function renderGrafico() {
+    const datos = historial[sectorActual] || [];
+    const comb  = COMBUSTIBLES.find(c => c.id === combustibleActual);
+
+    // Subtítulo del gráfico
+    document.getElementById('chartSubtitle').textContent =
+        `${sectorActual} · ${comb.nombre}`;
+
+    // Destruir gráfico anterior para no acumular instancias
+    if (miGrafico) { miGrafico.destroy(); miGrafico = null; }
+
+    if (datos.length === 0) {
+        document.querySelector('.chart-wrapper').innerHTML =
+            '<div class="empty-state"><p>Sin datos para graficar.</p></div>';
+        return;
+    }
+
+    // Filtrar solo filas donde el precio no es 0
+    const datosFiltrados = datos.filter(d => d.precios[combustibleActual] > 0);
+
+    if (datosFiltrados.length === 0) {
+        document.querySelector('.chart-wrapper').innerHTML =
+            '<div class="empty-state"><p>No hay datos de este combustible en este sector.</p></div>';
+        return;
+    }
+
+    // Asegurar que el canvas existe
+    let wrapper = document.querySelector('.chart-wrapper');
+    if (!wrapper.querySelector('canvas')) {
+        wrapper.innerHTML = '<canvas id="historyChart"></canvas>';
+    }
+
+    const labels     = datosFiltrados.map(d => formatFecha(d.fecha));
+    const puntos     = datosFiltrados.map(d => d.precios[combustibleActual]);
+    const soloUnDia  = datosFiltrados.length === 1;
+
+    miGrafico = new Chart(document.getElementById('historyChart'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: comb.nombre,
+                data: puntos,
+                borderColor: comb.color,
+                backgroundColor: comb.color + '18',
+                borderWidth: 2,
+                pointRadius: soloUnDia ? 6 : 3,   // punto grande si solo hay 1 día
+                pointBackgroundColor: comb.color,
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ` S/ ${ctx.parsed.y.toFixed(2)} por galón`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { font: { size: 12 }, color: '#888780' }
+                },
+                y: {
+                    beginAtZero: false,
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    ticks: {
+                        font: { size: 12 },
+                        color: '#888780',
+                        callback: v => 'S/ ' + v.toFixed(2)
+                    }
+                }
             }
         }
+    });
+}
 
-        function iniciarInterfaz() {
-            actualizarRangoFechas();
-            renderizarSectores();
-            renderizarTarjetas();
-            renderizarSelectorCombustible();
-            actualizarGrafico();
-        }
+/* ─── Pie de página con info de actualización ─── */
+function renderFooter() {
+    const datos = historial[sectorActual] || [];
+    const info  = document.getElementById('dataInfo');
+    if (datos.length > 0) {
+        const ultima = formatFecha(datos[datos.length - 1].fecha);
+        info.textContent = `Última actualización: ${ultima} · Fuente: preciocombustible.com / Osinergmin`;
+    }
+}
 
-        function actualizarRangoFechas() {
-            const datosSector = historialDatos[sectorActual];
-            if(!datosSector || datosSector.length === 0) return;
-            const primeraFecha = datosSector[0].fecha;
-            const ultimaFecha = datosSector[datosSector.length - 1].fecha;
-            document.getElementById('dateRange').innerText = `Rango de análisis: ${formatearFecha(primeraFecha)} al ${formatearFecha(ultimaFecha)} (Datos oficiales)`;
-        }
+/* ─── Utilidad: formatear fecha ─── */
+function formatFecha(fechaStr) {
+    const [y, m, d] = fechaStr.split('-');
+    return `${d}/${m}/${y}`;
+}
 
-        function formatearFecha(fechaStr) {
-            const [y, m, d] = fechaStr.split('-');
-            return `${d}/${m}/${y}`;
-        }
-
-        function renderizarSectores() {
-            const container = document.getElementById('sectorScroll');
-            container.innerHTML = '';
-            SECTORES.forEach(sector => {
-                const btn = document.createElement('button');
-                btn.className = `sector-btn ${sector === sectorActual ? 'active' : ''}`;
-                btn.innerText = sector;
-                btn.onclick = () => { sectorActual = sector; iniciarInterfaz(); };
-                container.appendChild(btn);
-            });
-        }
-
-        function renderizarTarjetas() {
-            const container = document.getElementById('currentPricesGrid');
-            container.innerHTML = '';
-            const datosSector = historialDatos[sectorActual];
-            if(!datosSector || datosSector.length < 2) return;
-            
-            const datosHoy = datosSector[datosSector.length - 1];
-            const datosAyer = datosSector[datosSector.length - 2];
-
-            COMBUSTIBLES.forEach(comb => {
-                const precioHoy = datosHoy.precios[comb.id];
-                const precioAyer = datosAyer.precios[comb.id];
-                if(precioHoy === 0 || precioAyer === 0) return; // Si no hay dato, no muestra tarjeta
-
-                const diferencia = precioHoy - precioAyer;
-                const esSubida = diferencia > 0;
-                const card = document.createElement('div');
-                card.className = 'price-card';
-                card.style.borderTopColor = comb.color;
-                card.innerHTML = `
-                    <h3>${comb.nombre}</h3>
-                    <div class="price">S/ ${precioHoy.toFixed(2)}</div>
-                    <div class="trend ${esSubida ? 'up' : 'down'}">
-                        ${esSubida ? '▲' : '▼'} S/ ${Math.abs(diferencia).toFixed(2)} vs ayer
-                    </div>
-                `;
-                container.appendChild(card);
-            });
-        }
-
-        function renderizarSelectorCombustible() {
-            const container = document.getElementById('fuelSelector');
-            container.innerHTML = '';
-            COMBUSTIBLES.forEach(comb => {
-                const btn = document.createElement('button');
-                btn.className = `fuel-btn ${comb.id === combustibleGraficoActual ? 'active' : ''}`;
-                btn.innerText = comb.nombre;
-                btn.onclick = () => { combustibleGraficoActual = comb.id; renderizarSelectorCombustible(); actualizarGrafico(); };
-                container.appendChild(btn);
-            });
-        }
-
-        function actualizarGrafico() {
-            const datosSector = historialDatos[sectorActual];
-            if(!datosSector) return;
-            const combInfo = COMBUSTIBLES.find(c => c.id === combustibleGraficoActual);
-            
-            const labels = datosSector.map(d => formatearFecha(d.fecha));
-            const dataPoints = datosSector.map(d => d.precios[combustibleGraficoActual]);
-
-            if (miGrafico) miGrafico.destroy();
-            miGrafico = new Chart(document.getElementById('historyChart'), {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{ label: combInfo.nombre, data: dataPoints, borderColor: combInfo.color, backgroundColor: combInfo.color + '20', borderWidth: 2, pointRadius: 1, fill: true, tension: 0.1 }]
-                },
-                options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: false, ticks: { callback: value => 'S/ ' + value } } } }
-            });
-        }
-
-        // Iniciar la app pidiendo datos a Python
-        window.onload = cargarDatosReales;
-    </script>
+window.onload = cargarDatos;
+</script>
 </body>
 </html>
