@@ -110,6 +110,37 @@ def obtener_datos_osinergmin():
         df = df.dropna(subset=['sector'])
         print(f">>> Filas con sector reconocido: {len(df)}")
 
+        # ── BLOQUE NUEVO: Filtrar outliers y muestras pequeñas ──────────
+        # Antes de promediar, limpiamos los precios "raros".
+        # Analogía: si 10 grifos cobran S/15 y uno cobra S/50,
+        # ese único grifo distorsionaría el promedio. Lo descartamos.
+
+        def filtrar_outliers(grupo):
+            """Elimina precios fuera del rango normal del grupo"""
+            if len(grupo) < 3:
+                # Menos de 3 grifos = muestra poco confiable, la ignoramos
+                return grupo.iloc[0:0]  # devuelve un DataFrame vacío
+            Q1 = grupo.quantile(0.25)
+            Q3 = grupo.quantile(0.75)
+            IQR = Q3 - Q1
+            # Rango "normal": entre Q1-1.5*IQR y Q3+1.5*IQR
+            return grupo[(grupo >= Q1 - 1.5 * IQR) & (grupo <= Q3 + 1.5 * IQR)]
+
+        df_filtrado = []
+        for (sector, producto), grupo in df.groupby(['sector', 'producto']):
+            precios_limpios = filtrar_outliers(grupo['precio'])
+            if len(precios_limpios) > 0:
+                sub = grupo.loc[precios_limpios.index].copy()
+                df_filtrado.append(sub)
+
+        if not df_filtrado:
+            print(">>> Sin datos suficientes tras filtrar outliers")
+            return None
+
+        df = pd.concat(df_filtrado)
+        print(f">>> Filas tras filtrar outliers y muestras pequeñas: {len(df)}")
+        # ── FIN BLOQUE NUEVO ─────────────────────────────────────────────
+
         promedios = df.groupby(['sector', 'producto'])['precio'].mean()
         print(f">>> Promedios calculados:\n{promedios}")
         return promedios
